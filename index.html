@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>D&H College SAT Practice Portal</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+</head>
+<body>
+  <div id="auth-screen" class="auth-screen">
+    <div class="auth-card">
+      <div class="brand">
+        <img id="auth-logo" class="logo" alt="D&H College logo" />
+        <div>
+          <h1>D&H College SAT Practice Portal</h1>
+          <p>Upload SAT PDFs, extract questions, and practice by section.</p>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" data-auth-tab="login">Login</button>
+        <button class="tab" data-auth-tab="register">Create Account</button>
+        <button class="tab" data-auth-tab="reset">Reset Password</button>
+      </div>
+
+      <form id="login-form" class="auth-panel active">
+        <label>Username<input id="login-username" required autocomplete="username" /></label>
+        <label>Password<input id="login-password" type="password" required autocomplete="current-password" /></label>
+        <button class="primary full" type="submit">Login</button>
+      </form>
+
+      <form id="register-form" class="auth-panel">
+        <label>Username<input id="register-username" required autocomplete="username" /></label>
+        <label>Password<input id="register-password" type="password" required autocomplete="new-password" /></label>
+        <label>Security Question<input id="register-question" required placeholder="Example: What is my reset word?" /></label>
+        <label>Security Answer<input id="register-answer" required /></label>
+        <label class="checkline"><input id="register-admin" type="checkbox" /> Create as admin account</label>
+        <label id="admin-code-wrap" class="hidden">Admin Invite Code<input id="register-admin-code" placeholder="DNH-SAT-ADMIN" /></label>
+        <button class="primary full" type="submit">Create Account</button>
+        <p class="hint">Default admin invite code: <strong>DNH-SAT-ADMIN</strong>. Change this inside <code>app.js</code> before sharing publicly.</p>
+      </form>
+
+      <form id="reset-form" class="auth-panel">
+        <label>Username<input id="reset-username" required /></label>
+        <button id="find-reset-question" class="secondary full" type="button">Find Security Question</button>
+        <div id="reset-question-box" class="hidden">
+          <p id="reset-question-text" class="question-note"></p>
+          <label>Security Answer<input id="reset-answer" /></label>
+          <label>New Password<input id="reset-new-password" type="password" /></label>
+          <button class="primary full" type="submit">Reset Password</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="app-shell" class="hidden">
+    <header class="topbar">
+      <div class="brand">
+        <img id="site-logo" class="logo" alt="D&H College logo" />
+        <div>
+          <h1>SAT Practice Portal</h1>
+          <p>D&H College • Richmond, BC</p>
+        </div>
+      </div>
+      <nav>
+        <button class="nav-btn active" data-page="dashboard">Dashboard</button>
+        <button class="nav-btn admin-only" data-page="admin">Admin Upload</button>
+        <button class="nav-btn" data-page="library">Test Library</button>
+        <button class="nav-btn" data-page="history">Scores</button>
+        <button class="secondary small" id="logout">Logout</button>
+      </nav>
+    </header>
+
+    <main>
+      <section id="dashboard" class="page active">
+        <div class="hero">
+          <div>
+            <span class="badge">English • Math • Full Test</span>
+            <h2>Upload one SAT PDF, then launch it as English only, Math only, or a full SAT.</h2>
+            <p>The admin upload page keeps the quick PDF extraction workflow. Students can choose the exact practice mode they want from the test library.</p>
+            <div class="hero-actions">
+              <button class="primary" data-goto="library">Start Practice</button>
+              <button class="secondary admin-only" data-goto="admin">Upload SAT</button>
+            </div>
+          </div>
+          <div class="stat-grid">
+            <div class="stat-card"><strong id="stat-tests">0</strong><span>Saved SATs</span></div>
+            <div class="stat-card"><strong id="stat-attempts">0</strong><span>Your Attempts</span></div>
+            <div class="stat-card"><strong id="stat-best">N/A</strong><span>Best Score</span></div>
+          </div>
+        </div>
+
+        <div class="grid two">
+          <div class="card"><h3>Recent Tests</h3><div id="recent-tests"></div></div>
+          <div class="card"><h3>Recent Scores</h3><div id="recent-scores"></div></div>
+        </div>
+      </section>
+
+      <section id="admin" class="page">
+        <div class="card wide">
+          <div class="section-head">
+            <div>
+              <h2>Admin SAT Upload</h2>
+              <p class="muted">Upload the PDF, auto-extract questions, then attach an answer key for scoring.</p>
+            </div>
+            <span class="admin-pill">Admin only</span>
+          </div>
+
+          <form id="upload-form" class="form">
+            <div class="row">
+              <label>Test Name<input id="test-name" required placeholder="SAT Practice Test 1" /></label>
+              <label>Folder Date<input id="folder-date" type="date" required /></label>
+            </div>
+
+            <label>SAT PDF<input id="pdf-file" type="file" accept="application/pdf" required /></label>
+
+            <div class="extract-box">
+              <div>
+                <h3>Step 1: Auto Extract Questions</h3>
+                <p class="muted">Use Fast Text Extract for selectable PDFs. Use OCR for scanned PDFs like image-based SAT practice booklets.</p>
+              </div>
+              <div class="row-actions">
+                <button class="secondary" id="extract-fast" type="button">Fast Text Extract</button>
+                <button class="primary" id="extract-ocr" type="button">Extract With OCR</button>
+              </div>
+              <div id="extract-status" class="extract-status">No PDF extracted yet.</div>
+              <div id="extract-preview" class="extract-preview"></div>
+            </div>
+
+            <div class="extract-box">
+              <h3>Step 2: Upload Answer Key</h3>
+              <p class="muted">The answer key lets the website score English-only, Math-only, and full-test attempts separately.</p>
+              <label>Answer Key CSV<input id="answer-file" type="file" accept=".csv,text/csv" /></label>
+              <label>Optional Scoring Table CSV<input id="scoring-file" type="file" accept=".csv,text/csv" /></label>
+            </div>
+
+            <details>
+              <summary>CSV templates</summary>
+              <pre>Answer key CSV:
+module,question,section,correct_answer,type
+RW1,1,Reading and Writing,A,multiple_choice
+RW1,2,Reading and Writing,C,multiple_choice
+RW2,1,Reading and Writing,D,multiple_choice
+M1,1,Math,12,grid_in
+M1,2,Math,B,multiple_choice
+
+Optional scoring CSV:
+section,raw_score,scaled_score
+Reading and Writing,43,640
+Math,35,650</pre>
+            </details>
+
+            <div class="module-editor">
+              <h3>Detected Modules</h3>
+              <p class="muted">English-only uses Reading and Writing modules. Math-only uses Math modules. Full test uses both.</p>
+              <div id="module-list" class="module-list"></div>
+            </div>
+
+            <button class="primary" type="submit">Save SAT Test</button>
+          </form>
+        </div>
+      </section>
+
+      <section id="library" class="page">
+        <div class="card wide">
+          <div class="section-head">
+            <div>
+              <h2>Test Library</h2>
+              <p class="muted">Choose English only, Math only, or Full Test for each uploaded SAT.</p>
+            </div>
+            <input id="test-search" placeholder="Search tests or dates..." />
+          </div>
+          <div id="library-list"></div>
+        </div>
+      </section>
+
+      <section id="history" class="page">
+        <div class="card wide">
+          <div class="section-head">
+            <div><h2>Previous Scores</h2><p class="muted">Attempts are labelled by mode: English, Math, or Full Test.</p></div>
+            <button id="export-history" class="secondary">Export JSON</button>
+          </div>
+          <div id="history-list"></div>
+        </div>
+      </section>
+
+      <section id="test-runner" class="page runner-page">
+        <div class="runner-shell">
+          <div class="pdf-pane">
+            <div class="runner-bar">
+              <button id="exit-test" class="secondary small">Exit</button>
+              <strong id="runner-title"></strong>
+              <span id="module-label"></span>
+            </div>
+            <embed id="pdf-viewer" type="application/pdf" />
+          </div>
+
+          <aside class="answer-pane">
+            <div class="timer-card"><span>Time Remaining</span><strong id="timer">00:00</strong></div>
+            <div class="progress-line"><span id="question-progress"></span><span id="answered-count"></span></div>
+
+            <div class="toolbox">
+              <strong>Text Tools</strong>
+              <button class="secondary small" id="highlight-btn" type="button">Highlight</button>
+              <button class="secondary small" id="underline-btn" type="button">Underline</button>
+              <button class="secondary small" id="clear-markup-btn" type="button">Clear</button>
+            </div>
+
+            <div id="question-panel"></div>
+
+            <div id="math-tools" class="toolbox hidden">
+              <strong>Math Formula Helper</strong>
+              <div class="formula-grid">
+                <button data-insert="√()">√</button>
+                <button data-insert="π">π</button>
+                <button data-insert="^2">x²</button>
+                <button data-insert="^3">x³</button>
+                <button data-insert="()/()">fraction</button>
+                <button data-insert="±">±</button>
+                <button data-insert="≤">≤</button>
+                <button data-insert="≥">≥</button>
+                <button data-insert="°">°</button>
+                <button data-insert="| |">absolute</button>
+              </div>
+              <details>
+                <summary>SAT Math Reference</summary>
+                <p class="muted smalltext">Circle area πr², circumference 2πr, Pythagorean theorem a²+b²=c², slope (y₂-y₁)/(x₂-x₁), quadratic formula (-b±√(b²-4ac))/(2a).</p>
+              </details>
+            </div>
+
+            <div class="runner-actions">
+              <button id="prev-question" class="secondary">Previous</button>
+              <button id="mark-review" class="secondary">Mark Review</button>
+              <button id="next-question" class="primary">Next</button>
+            </div>
+            <button id="submit-module" class="danger full">Submit Module</button>
+
+            <div>
+              <h4>Skip to Question</h4>
+              <div id="question-grid" class="question-grid"></div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section id="results" class="page">
+        <div class="card wide">
+          <h2>Results</h2>
+          <div id="results-summary"></div>
+          <div id="results-details"></div>
+          <button class="primary" data-goto="history">View Score History</button>
+          <button class="secondary" data-goto="library">Back to Tests</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>
